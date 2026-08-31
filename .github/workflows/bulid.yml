@@ -53,12 +53,32 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      - name: Prepare base CPython (download externals)
+        shell: cmd
+        run: |
+          cd cpython_base\PCbuild
+          build.bat -e -p x64
+        continue-on-error: true
+
       - name: Retarget base CPython toolset (v140 → v143)
         shell: pwsh
         run: |
           Get-ChildItem cpython_base\PCbuild -Recurse -Filter *.vcxproj | ForEach-Object {
             (Get-Content $_.FullName) -replace 'v140','v143' | Set-Content $_.FullName
           }
+
+      - name: Build base CPython
+        shell: cmd
+        run: |
+          cd cpython_base\PCbuild
+          build.bat -p x64
+
+      - name: Prepare target CPython (download externals)
+        shell: cmd
+        run: |
+          cd cpython_target\PCbuild
+          build.bat -e -p x64
+        continue-on-error: true
 
       - name: Retarget target CPython toolset (v140 → v143)
         shell: pwsh
@@ -67,17 +87,11 @@ jobs:
             (Get-Content $_.FullName) -replace 'v140','v143' | Set-Content $_.FullName
           }
 
-      - name: Build base CPython
-        shell: cmd
-        run: |
-          cd cpython_base\PCbuild
-          build.bat -e -p x64
-
       - name: Build target CPython
         shell: cmd
         run: |
           cd cpython_target\PCbuild
-          build.bat -e -p x64
+          build.bat -p x64
 
       - name: Generate .pud
         shell: pwsh
@@ -96,6 +110,7 @@ jobs:
         shell: pwsh
         run: |
           cd repo
+          if (!(Test-Path releases.json)) { '{}' | Set-Content releases.json }
           $data = Get-Content releases.json | ConvertFrom-Json
           $entry = @{
             base = "${{ inputs.base_version }}"
