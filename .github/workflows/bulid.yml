@@ -16,11 +16,16 @@ on:
         required: true
         default: '3.10'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout pudate-packages
+        uses: actions/checkout@v4
         with:
           path: repo
 
@@ -30,6 +35,7 @@ jobs:
           repository: python/cpython
           ref: v${{ inputs.base_version }}
           path: cpython_base
+          fetch-depth: 1
 
       - name: Checkout target CPython
         uses: actions/checkout@v4
@@ -37,23 +43,41 @@ jobs:
           repository: python/cpython
           ref: v${{ inputs.target_version }}
           path: cpython_target
+          fetch-depth: 1
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Retarget base CPython toolset (v140 → v143)
+        shell: pwsh
+        run: |
+          Get-ChildItem cpython_base\PCbuild -Recurse -Filter *.vcxproj | ForEach-Object {
+            (Get-Content $_.FullName) -replace 'v140','v143' | Set-Content $_.FullName
+          }
+
+      - name: Retarget target CPython toolset (v140 → v143)
+        shell: pwsh
+        run: |
+          Get-ChildItem cpython_target\PCbuild -Recurse -Filter *.vcxproj | ForEach-Object {
+            (Get-Content $_.FullName) -replace 'v140','v143' | Set-Content $_.FullName
+          }
+
       - name: Build base CPython
         shell: cmd
         run: |
-          cd cpython_base
-          PCbuild\build.bat -p x64
+          cd cpython_base\PCbuild
+          build.bat -e -p x64
 
       - name: Build target CPython
         shell: cmd
         run: |
-          cd cpython_target
-          PCbuild\build.bat -p x64
+          cd cpython_target\PCbuild
+          build.bat -e -p x64
 
       - name: Generate .pud
         shell: pwsh
@@ -68,8 +92,25 @@ jobs:
             --to ${{ inputs.target_version }} `
             --output ${{ inputs.major_minor }}/pudate_${{ inputs.target_version }}.pud
 
-      - name: Upload pud artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pudate-${{ inputs.target_version }}
-          path: repo/${{ inputs.major_minor }}/pudate_${{ inputs.target_version }}.pud
+      - name: Update releases.json
+        shell: pwsh
+        run: |
+          cd repo
+          $data = Get-Content releases.json | ConvertFrom-Json
+          $entry = @{
+            base = "${{ inputs.base_version }}"
+            latest = "${{ inputs.target_version }}"
+            pud = "${{ inputs.major_minor }}/pudate_${{ inputs.target_version }}.pud"
+          }
+          $data | Add-Member -NotePropertyName "${{ inputs.major_minor }}" -NotePropertyValue $entry -Force
+          $data | ConvertTo-Json -Depth 10 | Set-Content releases.json
+
+      - name: Commit and push
+        shell: pwsh
+        run: |
+          cd repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add releases.json ${{ inputs.major_minor }}/
+          git diff --staged --quiet || git commit -m "Add pudate_${{ inputs.target_version }}.pud"
+          git push
