@@ -1,0 +1,75 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_version:
+        description: '基准版本'
+        required: true
+        default: '3.10.11'
+      target_version:
+        description: '目标版本'
+        required: true
+        default: '3.10.21'
+      major_minor:
+        description: '主版本目录'
+        required: true
+        default: '3.10'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Checkout base CPython
+        uses: actions/checkout@v4
+        with:
+          repository: python/cpython
+          ref: ${{ inputs.base_version }}
+          path: cpython_base
+
+      - name: Checkout target CPython
+        uses: actions/checkout@v4
+        with:
+          repository: python/cpython
+          ref: ${{ inputs.target_version }}
+          path: cpython_target
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build base CPython
+        shell: cmd
+        run: |
+          cd cpython_base
+          PCbuild\build.bat -p x64
+
+      - name: Build target CPython
+        shell: cmd
+        run: |
+          cd cpython_target
+          PCbuild\build.bat -p x64
+
+      - name: Generate .pud
+        shell: pwsh
+        run: |
+          cd repo
+          python generate.py `
+            --old "PCbuild/amd64;Lib" `
+            --new "PCbuild/amd64;Lib" `
+            --old-base ../cpython_base `
+            --new-base ../cpython_target `
+            --from ${{ inputs.base_version }} `
+            --to ${{ inputs.target_version }} `
+            --output ${{ inputs.major_minor }}/pudate_${{ inputs.target_version }}.pud
+
+      - name: Upload pud artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pudate-${{ inputs.target_version }}
+          path: repo/${{ inputs.major_minor }}/pudate_${{ inputs.target_version }}.pud
