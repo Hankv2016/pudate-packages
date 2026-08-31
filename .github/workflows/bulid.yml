@@ -78,7 +78,7 @@ jobs:
         run: |
           cd cpython_target\PCbuild
           msbuild pcbuild.proj /t:Build /m /nologo /v:m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:IncludeExternals=false /p:IncludeCTypes=true /p:IncludeSSL=true /p:IncludeTkinter=true
-
+          
       - name: Generate .pud
         shell: pwsh
         run: |
