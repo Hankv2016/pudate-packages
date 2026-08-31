@@ -28,14 +28,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: python/cpython
-          ref: ${{ inputs.base_version }}
+          ref: v${{ inputs.base_version }}
           path: cpython_base
 
       - name: Checkout target CPython
         uses: actions/checkout@v4
         with:
           repository: python/cpython
-          ref: ${{ inputs.target_version }}
+          ref: v${{ inputs.target_version }}
           path: cpython_target
 
       - name: Setup Python
