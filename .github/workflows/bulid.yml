@@ -53,45 +53,31 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Prepare base CPython (download externals)
+      - name: Prepare externals (base)
         shell: cmd
         run: |
           cd cpython_base\PCbuild
           build.bat -e -p x64
         continue-on-error: true
 
-      - name: Retarget base CPython toolset (v140 → v143)
-        shell: pwsh
-        run: |
-          Get-ChildItem cpython_base\PCbuild -Recurse -Filter *.vcxproj | ForEach-Object {
-            (Get-Content $_.FullName) -replace 'v140','v143' | Set-Content $_.FullName
-          }
-
-      - name: Build base CPython
+      - name: Build base CPython (force v143)
         shell: cmd
         run: |
           cd cpython_base\PCbuild
-          build.bat -p x64
+          msbuild pcbuild.proj /t:Build /m /nologo /v:m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:IncludeExternals=false /p:IncludeCTypes=true /p:IncludeSSL=true /p:IncludeTkinter=true
 
-      - name: Prepare target CPython (download externals)
+      - name: Prepare externals (target)
         shell: cmd
         run: |
           cd cpython_target\PCbuild
           build.bat -e -p x64
         continue-on-error: true
 
-      - name: Retarget target CPython toolset (v140 → v143)
-        shell: pwsh
-        run: |
-          Get-ChildItem cpython_target\PCbuild -Recurse -Filter *.vcxproj | ForEach-Object {
-            (Get-Content $_.FullName) -replace 'v140','v143' | Set-Content $_.FullName
-          }
-
-      - name: Build target CPython
+      - name: Build target CPython (force v143)
         shell: cmd
         run: |
           cd cpython_target\PCbuild
-          build.bat -p x64
+          msbuild pcbuild.proj /t:Build /m /nologo /v:m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:IncludeExternals=false /p:IncludeCTypes=true /p:IncludeSSL=true /p:IncludeTkinter=true
 
       - name: Generate .pud
         shell: pwsh
