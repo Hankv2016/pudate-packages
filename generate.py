@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-generate.py - 生成 .pud 增量更新包 (msgpack 版，无 base64 膨胀)
+generate.py - 生成 .pud 增量更新包 (msgpack + zstd)
 """
 
 import sys
@@ -9,7 +9,7 @@ import io
 import os
 import hashlib
 import argparse
-import zlib
+import zstd
 import msgpack
 
 # 强制 stdout/stderr 用 UTF-8
@@ -64,7 +64,7 @@ def generate_pud(old_base, new_base, old_paths, new_paths, from_ver, to_ver):
             added[rel] = {
                 'hash': file_hash(content),
                 'size': len(content),
-                'content': content,          # 直接存 bytes，不 base64
+                'content': content,
             }
         else:
             with open(old_files[rel], 'rb') as f:
@@ -73,7 +73,7 @@ def generate_pud(old_base, new_base, old_paths, new_paths, from_ver, to_ver):
                 modified[rel] = {
                     'hash': file_hash(content),
                     'size': len(content),
-                    'content': content,      # 直接存 bytes
+                    'content': content,
                 }
 
     for rel in old_files:
@@ -116,13 +116,9 @@ def main():
         to_ver=args.to_ver,
     )
 
-    # msgpack 序列化（原生支持 bytes）
     payload = msgpack.packb(pud, use_bin_type=True)
+    compressed = zstd.compress(payload, 20)
 
-    # zlib 压缩
-    compressed = zlib.compress(payload)
-
-    # 写入: [4字节原始大小][压缩数据]
     os.makedirs(os.path.dirname(args.output) if os.path.dirname(args.output) else '.', exist_ok=True)
     with open(args.output, 'wb') as f:
         f.write(len(payload).to_bytes(4, 'little'))
@@ -130,7 +126,7 @@ def main():
 
     print(f"PUD written to: {args.output}")
     print(f"Uncompressed: {len(payload)} bytes")
-    print(f"Compressed: {len(compressed)} bytes")
+    print(f"Compressed (zstd 20): {len(compressed)} bytes")
 
 
 if __name__ == '__main__':
